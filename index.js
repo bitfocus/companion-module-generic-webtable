@@ -1,10 +1,8 @@
 // index
 
 import { InstanceBase, runEntrypoint, combineRgb } from '@companion-module/base'
-import { upgradeScripts } from './upgrades.js'
-import { readFile, createReadStream } from 'fs'
-import { createInterface } from 'readline'
 import { randomBytes, createHash } from 'crypto'
+import { upgradeScripts } from './upgrades.js'
 import { httpReceiver, sendFile } from './companionModuleHttpReceiver.js'
 
 
@@ -24,13 +22,13 @@ class WebTableInstance extends InstanceBase {
         }
         this.valuesOptions = []
 
-        this.httpReceiver = new httpReceiver(this)
+        this.httpReceiver = new httpReceiver()
 
         // index.html
-        this.httpReceiver.route('/', () => sendFile('templates/index.html', 'text/html'))
+        this.httpReceiver.route('/', () => sendFile('webserver-templates-index.html', 'text/html'))
 
         // scripts handler
-        this.httpReceiver.route('/scripts/<name>', (request, name) => sendFile('scripts/' + name, 'text/javascript'))
+        this.httpReceiver.route('/scripts/<name>', (request, name) => sendFile('webserver-scripts-' + name, 'text/javascript'))
 
         // api handler "GET"
         this.httpReceiver.route('/api/<cmd>', (request, cmd) => {
@@ -62,6 +60,12 @@ class WebTableInstance extends InstanceBase {
                     return 200
             }
         }, [ 'POST' ])
+
+        this.httpReceiver.log = (...args) => this.log(...args)
+    }
+
+    handleHttpRequest(request) {
+        return this.httpReceiver.requestHandler(request)
     }
 
 	// run "configUpdated()" when module gets enabled
@@ -69,13 +73,12 @@ class WebTableInstance extends InstanceBase {
 
     async destroy() {
         this.saveConfig(this.config)
-        // await this.stopServer()
         this.moduleInitiated = false
         this.updateStatus('disconnected')
         this.log('info', 'Instance inactive!')
     }
 
-	// update config and try to connect to init module
+	// update config and init module
 	async configUpdated(config) {
         if (config.data === undefined) config.data = []
         if (config.status === undefined) config.status = {}
@@ -100,56 +103,6 @@ class WebTableInstance extends InstanceBase {
         this.moduleInitiated = true
 		this.updateStatus('ok')
         this.log('info', 'Instance ready to use!')
-    }
-
-    async handleGetRequest(request) {
-        switch(request.path) {
-
-            case '/': return await this.sendFile('index.html', 'text/html')
-
-            case '/scripts/crypto.js': return await this.sendFile('crypto.js', 'text/javascript')
-
-            case '/api/get_token':
-                if (request.query['type'] === null || !Object.keys(this.tokens).includes(request.query['type'])) return { status: 400 }
-                let token = this.createToken()
-                while(this.tokenExists(token)) token = this.createToken()
-                this.tokens[request.query['type']][token] = 'Basic ' + this.createHash(token)
-                return {
-                    body: JSON.stringify({ token: token, password: (this.config.password !== undefined && this.config.password !== '') }),
-                    header: { 'Content-Type': 'application/json' },
-                    status: 200
-                }
-            
-            case '/api/get_size':
-                return {
-                    body: JSON.stringify({ columns: this.config.columns, rows: this.config.rows }),
-                    header: { 'Content-Type': 'application/json' },
-                    status: 200
-                }
-
-            case '/api/get_current_data':
-                const status = this.proofAuthorization(request.query['token'], request.headers.authorization)
-                if (status !== 200) return { status: status }
-                return {
-                    body: JSON.stringify(this.config.data),
-                    header: { 'Content-Type': 'application/json' },
-                    status: 200
-                }
-
-            default: return { status: 404 }
-        }
-    }
-
-    async handlePostRequest(request) {
-        switch(request.path) {
-
-            case '/api/submit_data':
-                const status = this.proofAuthorization(request.query['token'], request.headers.authorization)
-                if (status !== 200) return { status: status }
-                setTimeout(() => this.changeData(request.body))
-                return { status: 200 }
-            default: return { status: 404 }
-        }
     }
 
     getDataArray() {
@@ -265,59 +218,6 @@ class WebTableInstance extends InstanceBase {
         }
         if (this.config.columns === labels.length) return labels
         return undefined
-    }
-
-    renderTemplate(path, template={}) {
-        return new Promise((res) => {
-            const response = { body: '' }
-            const lineInterface = createInterface({ input: createReadStream(path), crlfDelay: Infinity })
-            lineInterface.on('line', (line) => {
-                let readLine = ''
-                let key = undefined
-                for (let i=0; i<line.length; i++) {
-                    readLine += line[i]
-                    if (i <= 2) continue
-
-                    const lastTwo = readLine.slice(-2)
-                    if (lastTwo === '{{') {
-                        key = ''
-                        continue
-                    }
-                    if (key === undefined) continue
-                    
-                    if (lastTwo === '}}') {
-                        const value = template[key.slice(0, -1).trim()]
-                        if (value !== undefined) readLine = readLine.slice(0, i-key.length-2) + value
-                        key = undefined
-                    }
-                    else key += line[i]
-                }
-                response.body += readLine + '\r\n'
-            })
-
-            lineInterface.on('close', () => {
-                if (response.body === '') {
-                    res({ status: 500 })
-                    return
-                }
-                response.headers = { 'Content-Type': 'text/html' }
-                response.status = 200
-                res(response)
-            })
-        })
-    }
-
-    sendFile(path, mimeType) {
-        return new Promise((res) => {
-            if (this.files[path] !== undefined) res({ body: this.files[path], headers: { 'Content-Type': mimeType }, status: 200 })
-            else readFile(path, 'utf8', (err, data) => {
-                if (err) res({ status: 500 })
-                else {
-                    res({ body: data, headers: { 'Content-Type': mimeType }, status: 200 })
-                    this.files[path] = data
-                }
-            })
-        })
     }
 
     createToken(length=32) {
@@ -778,7 +678,6 @@ class WebTableInstance extends InstanceBase {
                         id: 'cell',
                         useVariables: true,
                         default: 'A1',
-                        tooltip: 'e.g. A1, A2, B11, AC37...',
                     },
                     {
                         type: 'dropdown',
@@ -798,13 +697,11 @@ class WebTableInstance extends InstanceBase {
                         id: 'value',
                         useVariables: true,
                         default: '',
-                        tooltip: 'Enter any value to check the specified cell with selected operation',
                     },
                     {
                         type: 'checkbox',
                         label: 'Disable case sensitive comparison',
                         id: 'insesitive',
-                        tooltip: 'If checked, the feedback will ignore case sensetivity',
                     }
                 ],
                 defaultStyle: {
@@ -834,6 +731,7 @@ class WebTableInstance extends InstanceBase {
                     }
 
                     if (options.operation === 0 && options.reference === options.value) return true
+                    if (options.reference !== '' && options.value === '') return false
                     if (options.operation === 1 && options.reference.includes(options.value)) return true
                     if (options.operation === 2 && options.reference.startsWith(options.value)) return true
                     if (options.operation === 3 && options.reference.endsWith(options.value)) return true
@@ -994,7 +892,6 @@ class WebTableInstance extends InstanceBase {
         return variables
     }
 }
-
 
 
 runEntrypoint(WebTableInstance, upgradeScripts)

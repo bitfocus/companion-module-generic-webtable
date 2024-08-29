@@ -75,7 +75,12 @@ export class httpReceiver {
         this.instance = moduleInstance
         this.routes = {}
 
-        if (this.instance !== undefined) this.instance.handleHttpRequest = (request) => this.requestHandler(request)
+        this.log = (type, message) => {}
+
+        if (this.instance !== undefined) {
+            this.instance.handleHttpRequest = () => this.requestHandler.apply(this, arguments)
+            this.log = () => this.instance.log.apply(this, arguments)
+        }
     }
 
     async requestHandler(request) {
@@ -92,11 +97,11 @@ export class httpReceiver {
                 if (pathElements[i].startsWith('<') && pathElements[i].endsWith('>')) variables.push(elements[i])
             }
             response = await callback(request, variables)
-            this.instance.log('debug', `${request.method}: client="${request.ip}" url="${request.originalUrl}" (${response.status}) ${Date.now()-start}ms`)
+            this.log('debug', `${request.method}: client="${request.ip}" url="${request.originalUrl}" (${response.status}) ${Date.now()-start}ms`)
             return response
             
         }
-        this.instance.log('debug', `${request.method}: client="${request.ip}" url="${request.originalUrl}" (${response.status}) ${Date.now()-start}ms`)
+        this.log('debug', `${request.method}: client="${request.ip}" url="${request.originalUrl}" (${response.status}) ${Date.now()-start}ms`)
         return response
     }
 

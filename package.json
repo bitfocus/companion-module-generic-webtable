@@ -13,7 +13,8 @@
 	"license": "MIT",
 	"dependencies": {
 		"@companion-module/base": "^1.10.0",
-		"npm": "^10.8.1"
+		"npm": "^10.8.1",
+		"webpack": "^5.94.0"
 	},
 	"devDependencies": {
 		"@companion-module/tools": "^1.4.2"
