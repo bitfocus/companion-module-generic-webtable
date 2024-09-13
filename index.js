@@ -304,7 +304,7 @@ class WebTableInstance extends InstanceBase {
                 width: 8,
                 label: 'Enable variables for all table cells:',
                 default: false,
-                tooltip: 'This can impact performance on lange tables!',
+                tooltip: 'This can impact performance on large tables!',
             }
         ]
     }
