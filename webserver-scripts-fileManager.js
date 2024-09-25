@@ -1,7 +1,7 @@
 
 
 
-// readt text string from file
+// read text string from file
 function readFile(types='*.*', timeout=60) {
 
     return new Promise((res) => {

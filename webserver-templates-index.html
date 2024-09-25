@@ -363,6 +363,8 @@
     await addScript(baseUrl + '/scripts/popupManager.js')
     await addScript(baseUrl + '/scripts/crypto.js')
 
+    console.log(document.body.children)
+
     const MENU = {
         columnMenu: document.getElementById('contextMenuColumn'),
         rowMenu: document.getElementById('contextMenuRow'),
@@ -985,10 +987,11 @@
     function addScript(src) {
         return new Promise((res) => {
             const script = document.createElement('script')
-            script.onload = () => res(true)
-            script.onerror = () => res(false)
             script.setAttribute('src', src)
             document.body.appendChild(script)
+            console.log(script)
+            script.onload = () => res(true)
+            script.onerror = () => res(false)
         })
     }
 

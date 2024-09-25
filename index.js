@@ -3,7 +3,7 @@
 import { InstanceBase, runEntrypoint, combineRgb } from '@companion-module/base'
 import { randomBytes, createHash } from 'crypto'
 import { upgradeScripts } from './upgrades.js'
-import { httpReceiver, sendFile } from './companionModuleHttpReceiver.js'
+import { easyHttpRequestHandler, sendFile } from './handleHttpRequestHelper.js'
 
 
 
@@ -21,17 +21,14 @@ class WebTableInstance extends InstanceBase {
             session: {}
         }
         this.valuesOptions = []
+    }
 
-        this.httpReceiver = new httpReceiver()
+    handleHttpRequest = easyHttpRequestHandler((request) => {
+        request.onpath('/', async () => await sendFile('webserver-templates-index.html', 'text/html'))
 
-        // index.html
-        this.httpReceiver.route('/', () => sendFile('webserver-templates-index.html', 'text/html'))
+        request.onpath('/scripts/<name>', async (name) => await sendFile('webserver-scripts-' + name, 'text/javascript'))
 
-        // scripts handler
-        this.httpReceiver.route('/scripts/<name>', (request, name) => sendFile('webserver-scripts-' + name, 'text/javascript'))
-
-        // api handler "GET"
-        this.httpReceiver.route('/api/<cmd>', (request, cmd) => {
+        request.onpath('/api/<cmd>', (cmd) => {
             switch(cmd) {
                 case 'get_token':
                     if (request.query['type'] === null || !Object.keys(this.tokens).includes(request.query['type'])) return 400
@@ -50,8 +47,7 @@ class WebTableInstance extends InstanceBase {
             }
         })
 
-        // api handler "POST"
-        this.httpReceiver.route('/api/<cmd>', (request, cmd) => {
+        request.onpath('/api/<cmd>', (cmd) => {
             switch (cmd) {
                 case 'submit_data':
                     const status = this.proofAuthorization(request.query['token'], request.headers.authorization)
@@ -61,12 +57,10 @@ class WebTableInstance extends InstanceBase {
             }
         }, [ 'POST' ])
 
-        this.httpReceiver.log = (...args) => this.log(...args)
-    }
-
-    handleHttpRequest(request) {
-        return this.httpReceiver.requestHandler(request)
-    }
+        request.onresponse = (response) => this.log('debug', `${request.method}: client="${request.ip}" url="${request.originalUrl}" (${response.status}) ${Date.now()-request.time}ms`)
+        
+        request.onerror = (error) => this.log('error', error)
+    })
 
 	// run "configUpdated()" when module gets enabled
 	init = async (config) => this.configUpdated(config)

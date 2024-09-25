@@ -4,5 +4,5 @@ module.exports = {
         'webserver-scripts-fileManager.js',
         'webserver-scripts-popupManager.js',
         'webserver-templates-index.html',
-    ]
+    ],
 }
