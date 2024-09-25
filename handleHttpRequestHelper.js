@@ -35,7 +35,7 @@ export const renderTemplate = (path, template={}) => {
 
         lineInterface.on('close', () => {
             if (response.body === '') {
-                res(500)
+                res(res(new Response(body, { 'Content-Type': 'text/html' }, 500, `no data in file '${path}'`)))
                 return
             }
             response.headers = { 'Content-Type': 'text/html' }
@@ -51,7 +51,7 @@ export const renderTemplate = (path, template={}) => {
 export const sendFile = (path, mimeType) => {
     return new Promise((res) => {
         readFile(path, 'utf8', (err, data) => {
-            if (err) res(500)
+            if (err) res(new Response(data, { 'Content-Type': mimeType }, 500, err.message))
             else res(sendFileData(data, mimeType))
         })
     })
@@ -62,7 +62,8 @@ export const sendFile = (path, mimeType) => {
 
 
 export const sendFileData = (data, mimeType) => {
-    if (data === undefined || mimeType === undefined) return 500
+    if (data === undefined) return new Response(data, { 'Content-Type': mimeType }, 500, `no data available`)
+    if (mimeType === undefined) return new Response(data, { 'Content-Type': mimeType }, 500, `invalid mime type: '${mimeType}'`)
     return new Response(data, { 'Content-Type': mimeType }, 200)
 }
 
@@ -70,10 +71,11 @@ export const sendFileData = (data, mimeType) => {
 
 
 export class Response {
-    constructor(body='', headers={}, status=500) {
+    constructor(body='', headers={}, status=500, error=undefined) {
         this.body = body
         this.headers = headers
         this.status = status
+        this.error = error
     }
 }
 
@@ -110,12 +112,20 @@ class Request {
             this.routes[`${method}:${path.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&').replace(/<[^>]+>/g, '([^/]+)')}`] = {
                 callback: async (variables) => {
                     const response = await callback.apply(null, variables)
-                    if (response === null || response === undefined) return { status: 500 }
+                    if (response === null || response === undefined) {
+                        this.logError(`invalid response: ${response}`)
+                        return { status: 500 }
+                    }
+                    if (response instanceof Response && response.error !== undefined) {
+                        this.logError(response.error)
+                        return { status: 500 }
+                    }
                     if (Number.isInteger(response)) return { status: response }
                     if (typeof response === 'string' || typeof response === 'number') return { body: response.toString(), status: 200 }
                     if (Array.isArray(response)) return { body: JSON.stringify(response), headers: { 'Content-Type': 'application/json' }, status: 200 }
                     if (response instanceof Response) return { body: response.body, headers: response.headers, status: response.status }
                     if (typeof response === 'object') return { body: JSON.stringify(response), headers: { 'Content-Type': 'application/json' },status: 200 }
+                    this.logError(`invalid response: ${response}`)
                     return { status: 500 }
                 },
                 pathElements: path.split('/')
@@ -143,6 +153,10 @@ class Request {
         }
         return response
     }
+
+    logError(error) {
+        if (typeof this.onerror === 'function') this.onerror(error)
+    }
 }
 
 
@@ -160,7 +174,7 @@ export const easyHttpRequestHandler = (hadlerConfigFunction) => {
             return response
         }
         catch(error) {
-            if (typeof handler.onerror === 'function') handler.onerror(error)
+            handler.logError(error.message)
         }
     }
 }
