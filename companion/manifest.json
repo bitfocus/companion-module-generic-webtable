@@ -3,7 +3,7 @@
 	"name": "Generic Web-Table",
 	"shortname": "table",
 	"description": "Generic Web-Table",
-	"version": "1.0.1",
+	"version": "1.0.2",
 	"license": "MIT",
 	"repository": "https://github.com/bitfocus/companion-module-generic-webtable",
 	"bugs": "https://github.com/bitfocus/companion-module-generic-webtable/issues",
