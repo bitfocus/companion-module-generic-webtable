@@ -363,8 +363,6 @@
     await addScript(baseUrl + '/scripts/popupManager.js')
     await addScript(baseUrl + '/scripts/crypto.js')
 
-    console.log(document.body.children)
-
     const MENU = {
         columnMenu: document.getElementById('contextMenuColumn'),
         rowMenu: document.getElementById('contextMenuRow'),
@@ -507,7 +505,7 @@
                 label = String.fromCharCode((index % 26) + 65) + label
                 index = Math.floor(index / 26) - 1;
             }
-            headers[i].innerHTML = label
+            headers[i].textContent = label
         }
     }
 
@@ -564,7 +562,7 @@
         MENU.columnClipboardSingleUse = singleUse
         MENU.columnClipboard = []
 
-        for (const row of TABLE.htmlBody.children) MENU.columnClipboard.push(row.children[index].innerHTML)
+        for (const row of TABLE.htmlBody.children) MENU.columnClipboard.push(row.children[index].textContent)
     }
 
 
@@ -581,7 +579,7 @@
 
         for (let i=0; i<TABLE.htmlBody.children.length; i++) {
             if (i === MENU.columnClipboard.length) break
-            TABLE.htmlBody.children[i].children[index].innerHTML = MENU.columnClipboard[i]
+            TABLE.htmlBody.children[i].children[index].textContent = MENU.columnClipboard[i]
         }
         if (MENU.columnClipboardSingleUse === true) MENU.columnClipboard = undefined
 
@@ -593,7 +591,7 @@
         const index = [ ...TABLE.htmlHead.children[0].children ].indexOf(MENU.targetColumn)
         if (index === -1) return
 
-        for (const row of TABLE.htmlBody.children) row.children[index].innerHTML = ''
+        for (const row of TABLE.htmlBody.children) row.children[index].textContent = ''
 
         saveLocaleData('table', await getTableData())
     }
@@ -655,7 +653,7 @@
         MENU.rowMenu.children[3].style.display = (headers.length <= 1) ? 'none' : 'block'
         MENU.rowMenu.children[6].style.display = (headers.length <= 1) ? 'none' : 'block'
 
-        for (let i=0; i<headers.length; i++) headers[i].children[0].innerHTML = i+1
+        for (let i=0; i<headers.length; i++) headers[i].children[0].textContent = i+1
     }
 
 
@@ -669,7 +667,7 @@
         else if (selection.type === 'Range' && selection.direction === 'forward') {
             text = selection.focusNode.nodeValue.slice(selection.anchorOffset, selection.focusOffset)
         }
-        else text = MENU.targetCell.innerHTML
+        else text = MENU.targetCell.textContent
         
         MENU.clipboard = text
         if (navigator.clipboard !== undefined) navigator.clipboard.writeText(text)
@@ -680,13 +678,13 @@
         const paste = (text) => {
             const selection = window.getSelection()
             if (selection.rangeCount <= 0) {
-                MENU.targetCell.innerHTML = text
+                MENU.targetCell.textContent = text
                 return
             }
             const range = selection.getRangeAt(0)
-            const before = MENU.targetCell.innerHTML.slice(0, range.startOffset)
-            const after = MENU.targetCell.innerHTML.slice(range.endOffset)
-            if (text !== '') MENU.targetCell.innerHTML = before + text + after
+            const before = MENU.targetCell.textContent.slice(0, range.startOffset)
+            const after = MENU.targetCell.textContent.slice(range.endOffset)
+            if (text !== '') MENU.targetCell.textContent = before + text + after
         }
         if (navigator.clipboard !== undefined) navigator.clipboard.readText().then(paste)
         else paste(MENU.clipboard)
@@ -694,7 +692,7 @@
 
 
     function clearCell() {
-        MENU.targetCell.innerHTML = ''
+        MENU.targetCell.textContent = ''
         MENU.targetCell.focus()
     }
 
@@ -751,7 +749,7 @@
         MENU.rowClipboard = []
         for (const cell of MENU.targetRow.parentNode.children) {
             if (cell.tagName.toLowerCase() === 'th') continue
-            MENU.rowClipboard.push(cell.innerHTML)
+            MENU.rowClipboard.push(cell.textContent)
         }
     }
     
@@ -767,7 +765,7 @@
         for (let i=1; i<MENU.targetRow.parentNode.children.length; i++) {
             if (i > MENU.rowClipboard.length) break
             else if (MENU.targetRow.parentNode.children[i].tagName.toLowerCase() === 'th') continue
-            MENU.targetRow.parentNode.children[i].innerHTML = MENU.rowClipboard[i-1]
+            MENU.targetRow.parentNode.children[i].textContent = MENU.rowClipboard[i-1]
         }
         if (MENU.rowClipboardSingleUse === true) MENU.rowClipboard = undefined
         saveLocaleData('table', await getTableData())
@@ -777,7 +775,7 @@
     async function clearRow() {
         for (const cell of MENU.targetRow.parentNode.children) {
             if (cell.tagName.toLowerCase() === 'th') continue
-            cell.innerHTML = ''
+            cell.textContent = ''
         }
         saveLocaleData('table', await getTableData())
     }
@@ -989,7 +987,6 @@
             const script = document.createElement('script')
             script.setAttribute('src', src)
             document.body.appendChild(script)
-            console.log(script)
             script.onload = () => res(true)
             script.onerror = () => res(false)
         })
@@ -1038,7 +1035,7 @@
         const rangeStart = range.startOffset
         const rangeEnd = range.endOffset
 
-        cell.innerHTML = cell.innerText.slice(0, rangeStart) + text + cell.innerText.slice(rangeEnd)
+        cell.textContent = cell.innerText.slice(0, rangeStart) + text + cell.innerText.slice(rangeEnd)
         
         const newRange = document.createRange()
         const textNode = cell.childNodes[0]
@@ -1059,8 +1056,9 @@
         const range = selection.getRangeAt(0)
 
         const cursorPosition = range.startOffset
-        const text = cell.innerText
-        cell.innerHTML = text
+        const text = cell.textContent
+        // console.log(text, cell.textContent)
+        // cell.textContent = text
 
         const newRange = document.createRange()
         const textNode = cell.childNodes[0]
