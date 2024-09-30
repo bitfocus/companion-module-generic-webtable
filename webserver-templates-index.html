@@ -318,7 +318,7 @@
     </div>
 <div class="footer">
     <div onclick="submitData(event)" ontouchstart="activate(event, '#ffffff', '#008a77')" ontouchend="deactivate(event, '#292929', '#e6e6e6')">Submit Data</div>
-    <u onclick="importCSV()">Import CSV</u>
+    <u onclick="importFile()">Import Table</u>
     <u onclick="requestCurrentData()">Request Current Data</u>
     <u onclick="exportCSV()">Export CSV</u>
 </div>
@@ -359,9 +359,10 @@
     const baseUrl = window.location.pathname.split('/').slice(0, 3).join('/')
     document.title = `Companion Table - "${baseUrl.split('/').slice(-1)[0]}"`
 
-    await addScript(baseUrl + '/scripts/fileManager.js')
-    await addScript(baseUrl + '/scripts/popupManager.js')
     await addScript(baseUrl + '/scripts/crypto.js')
+    await addScript(baseUrl + '/scripts/fileManager.js')
+    await addScript(baseUrl + '/scripts/jsZip.js')
+    await addScript(baseUrl + '/scripts/popupManager.js')
 
     const MENU = {
         columnMenu: document.getElementById('contextMenuColumn'),
@@ -389,6 +390,7 @@
 
         window.submitData = submitData
         window.importCSV = importCSV
+        window.importFile = importFile
         window.requestCurrentData = requestCurrentData
         window.exportCSV = exportCSV
 
@@ -936,8 +938,71 @@
     }
 
 
-    async function importCSV() {
-        setData(await parseCSV(await readFile('.csv')))
+    function getCellPosition(cellId) {
+        const match = cellId.match(/^([A-Z]+)(\d+)$/)
+        if (!match) {
+            throw new Error("Invalid cell identifier format")
+        }
+
+        const letters = match[1]
+        const row = parseInt(match[2], 10) - 1
+
+        let col = 0
+        for (let i = 0; i < letters.length; i++) {
+            col *= 26
+            col += letters.charCodeAt(i) - 'A'.charCodeAt(0) + 1
+        }
+
+        return [ row, col-1 ]
+    }
+
+
+    async function importCSV(file) {
+        setData(await parseCSV(file))
+    }
+
+
+    async function importXLSX(file) {
+        const arrayBuffer = await file.arrayBuffer()
+        const zip = await JSZip.loadAsync(arrayBuffer)
+
+        const sharedStrings = zip.file('xl/sharedStrings.xml')
+        if (!sharedStrings) return
+
+        const sharedStrings_xmlString = await sharedStrings.async('string')
+        const sharedStrings_parser = new DOMParser()
+        const sharedStrings_xmlDoc = sharedStrings_parser.parseFromString(sharedStrings_xmlString, 'text/xml')
+        const sharedStrings_elements = []
+
+        for (const element of sharedStrings_xmlDoc.getElementsByTagName('si')) {
+            const elementText = element.getElementsByTagName('t')[0]
+            sharedStrings_elements.push(elementText ? elementText.textContent : '')
+        }
+
+        const sheet1 = zip.file('xl/worksheets/sheet1.xml')
+        if (!sheet1) return
+
+        const sheet1_xmlString = await sheet1.async('string')
+        const sheet1_parser = new DOMParser()
+        const sheet1_xmlDoc = sheet1_parser.parseFromString(sheet1_xmlString, 'text/xml')
+        const data = []
+
+        for (const cell of sheet1_xmlDoc.getElementsByTagName('c')) {
+            const [ row, column ] = getCellPosition(cell.getAttribute('r'))
+            const cellValueElement = cell.getElementsByTagName('v')[0]
+            const cellTextContent = cellValueElement ? cellValueElement.textContent : ''
+            const cellValueText = (cell.getAttribute('t') === 's') ? sharedStrings_elements[parseInt(cellTextContent, 10)] : cellTextContent
+            if (data.length === row) data.push([])
+            data[row][column] = cellValueText
+        }
+
+        setData(data)
+    }
+
+    async function importFile() {
+        const file = await readFile('.csv,.xlsx')
+        if (file.fileType.toLowerCase() === 'csv') await importCSV(file)
+        else if (file.fileType.toLowerCase() === 'xlsx') await importXLSX(file)
     }
 
 
