@@ -3,7 +3,8 @@
 import { InstanceBase, runEntrypoint, combineRgb } from '@companion-module/base'
 import { randomBytes, createHash } from 'crypto'
 import { upgradeScripts } from './upgrades.js'
-import { easyHttpRequestHandler, sendFile } from './handleHttpRequestHelper.js'
+//import { easyHttpRequestHandler, sendFile } from './handleHttpRequestHelper.js'
+import { easyHttpRequestHandler, sendTextFile } from './handleHttpRequestHelper.js'
 
 
 
@@ -18,17 +19,21 @@ class WebTableInstance extends InstanceBase {
 
         this.tokens = {
             request: {},
-            session: {}
+            session: {},
+            permanent: {
+                get_json_data: this.createHash('get_json_data', this.label)
+            },
         }
         this.valuesOptions = []
     }
 
-    handleHttpRequest = easyHttpRequestHandler((request) => {
-        request.onpath('/', async () => await sendFile('webserver-templates-index.html', 'text/html'))
+    handleHttpRequest = easyHttpRequestHandler((route, events) => {
 
-        request.onpath('/scripts/<name>', async (name) => await sendFile('webserver-scripts-' + name, 'text/javascript'))
+        route('/', async () => await sendTextFile('webserver-templates-index.html', 'html'))
 
-        request.onpath('/api/<cmd>', (cmd) => {
+        route('/scripts/<name>', async (request, script) => await sendTextFile('webserver-scripts-' + script, 'javascript'))
+
+        route('/api/<cmd>', (request, cmd) => {
             switch(cmd) {
                 case 'get_token':
                     if (request.query['type'] === null || !Object.keys(this.tokens).includes(request.query['type'])) return 400
@@ -44,10 +49,15 @@ class WebTableInstance extends InstanceBase {
                     const status = this.proofAuthorization(request.query['token'], request.headers.authorization)
                     if (status !== 200) return status
                     return this.config.data
+                
+                case 'get_json_data':
+                    if (this.config.jsonDataSource !== true) return 404
+                    if (request.query.key !== this.tokens.permanent[cmd]) return 400
+                    return this.config.data.map((row) => Object.fromEntries(row.map((item, index) => [this.getColumnLabel(index, true), item])))
             }
         })
 
-        request.onpath('/api/<cmd>', (cmd) => {
+        route('/api/<cmd>', (request, cmd) => {
             switch (cmd) {
                 case 'submit_data':
                     const status = this.proofAuthorization(request.query['token'], request.headers.authorization)
@@ -57,9 +67,11 @@ class WebTableInstance extends InstanceBase {
             }
         }, [ 'POST' ])
 
-        request.onresponse = (response) => this.log('debug', `${request.method}: client="${request.ip}" url="${request.originalUrl}" (${response.status}) ${Date.now()-request.time}ms`)
+        // log webserver activity
+        events.on('response', (request, response) => this.log('debug', `[WEBSERVER] ${request.method}: client="${request.ip}" url="${request.originalUrl}" (${response.status}) ${Date.now()-request.time}ms`))
         
-        request.onerror = (error) => this.log('error', error)
+        // log webserver errors
+        events.on('error', (error) => this.log('error', error))
     })
 
 	// run "configUpdated()" when module gets enabled
@@ -225,8 +237,11 @@ class WebTableInstance extends InstanceBase {
         return false
     }
 
-    createHash(token) {
-        return createHash('sha256').update(token + this.config.password).digest('hex')
+    createHash(token, password=undefined) {
+        if (password === undefined) {
+            password = this.config.password
+        }
+        return createHash('sha256').update(token + password).digest('hex')
     }
 
     proofAuthorization(token, clientAuth, type='request') {
@@ -287,7 +302,7 @@ class WebTableInstance extends InstanceBase {
             },
             {
                 type: 'static-text',
-                id: 'test',
+                id: 'linkTableEditor',
                 width: 12,
                 label: '',
                 value: `<a href="/instance/${this.label}" target="_blank">🔗 Open table in new tab</a>`,
@@ -295,10 +310,26 @@ class WebTableInstance extends InstanceBase {
             {
                 type: 'checkbox',
                 id: 'cellVariables',
-                width: 8,
+                width: 6,
                 label: 'Enable variables for all table cells:',
                 default: false,
                 tooltip: 'This can impact performance on large tables!',
+            },
+            {
+                type: 'checkbox',
+                id: 'jsonDataSource',
+                width: 6,
+                label: 'Enable JSON Data Sorce:',
+                default: false,
+                tooltip: '',
+            },
+            {
+                type: 'static-text',
+                id: 'linkJsonDataSource',
+                width: 12,
+                label: '',
+                value: `<a href="/instance/${this.label}/api/get_json_data?key=${this.tokens.permanent.get_json_data}" target="_blank">🔗 JSON Data Source Link</a>`,
+                isVisible: (options) => options.jsonDataSource === true
             }
         ]
     }

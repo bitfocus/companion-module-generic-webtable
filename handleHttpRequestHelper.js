@@ -4,6 +4,23 @@ import { createInterface } from 'readline'
 
 
 
+export const loadTextLines = (path, manipulator, newline=false) => {
+    return new Promise((res) => {
+        const lineInterface = createInterface({ input: createReadStream(path), crlfDelay: Infinity })
+        let text = ''
+        if (typeof manipulator !== 'function') {
+            manipulator = (line) => line
+        }
+        lineInterface.on('line', (line) => {
+            text += manipulator(line)
+            if (newline === true) text += '\r\n'
+        })
+        lineInterface.on('close', () => res(text))
+    })
+}
+
+
+
 
 export const renderTemplate = (path, template={}) => {
     return new Promise((res) => {
@@ -48,15 +65,35 @@ export const renderTemplate = (path, template={}) => {
 
 
 
+export const sendTextFile = (path, type) => {
+    return new Promise(async (res) => {
+        let isJs = false
+        if (type === 'javascript') {
+            isJs = true
+        }
+        const text = await loadTextLines(path, (line) => line.trim(), true)
+        if (text === undefined) {
+            res(new Response(text, { 'Content-Type': 'text/' + type }, 500, 'loading text failed'))
+        }
+        else {
+            res(sendFileData(text, 'text/' + type))
+        }
+    })
+}
+
+
+
+
 export const sendFile = (path, mimeType) => {
+    loadFile(path)
     return new Promise((res) => {
         readFile(path, 'utf8', (err, data) => {
+            // console.log(data.replaceAll('\r\n', '###\r\n'))
             if (err) res(new Response(data, { 'Content-Type': mimeType }, 500, err.message))
             else res(sendFileData(data, mimeType))
         })
     })
 }
-
 
 
 
@@ -70,7 +107,7 @@ export const sendFileData = (data, mimeType) => {
 
 
 
-export class Response {
+class Response {
     constructor(body='', headers={}, status=500, error=undefined) {
         this.body = body
         this.headers = headers
@@ -82,42 +119,21 @@ export class Response {
 
 
 
+export const easyHttpRequestHandler = (handlerConfigFunction) => {
+    const routes = {}
+    const events = {}
 
-class Request {
-    constructor() {
-        this.routes = {}
-        this.lastRequest = {}
-    }
-
-    get baseUrl() { return this.lastRequest.baseUrl }
-
-    get body() { return this.lastRequest.body }
-
-    get headers() { return this.lastRequest.headers }
-
-    get hostname() { return this.lastRequest.hostname }
-
-    get ip() { return this.lastRequest.ip }
-
-    get method() { return this.lastRequest.method }
-
-    get originalUrl() { return this.lastRequest.originalUrl }
-
-    get path() { return this.lastRequest.path }
-
-    get query() { return this.lastRequest.query }
-
-    onpath(path, callback, methods=[ 'GET' ]) {
+    const route = (path, callback, methods=[ 'GET' ]) => {
         for (const method of methods) {
-            this.routes[`${method}:${path.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&').replace(/<[^>]+>/g, '([^/]+)')}`] = {
-                callback: async (variables) => {
-                    const response = await callback.apply(null, variables)
+            routes[`${method}:${path.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&').replace(/<[^>]+>/g, '([^/]+)')}`] = {
+                callback: async (parameters) => {
+                    const response = await callback.apply(null, parameters)
                     if (response === null || response === undefined) {
-                        this.logError(`invalid response: ${response}`)
+                        runEvent('error', [ `invalid response: ${response}` ])
                         return { status: 500 }
                     }
                     if (response instanceof Response && response.error !== undefined) {
-                        this.logError(response.error)
+                        runEvent('error', [ response.error ])
                         return { status: 500 }
                     }
                     if (Number.isInteger(response)) return { status: response }
@@ -125,56 +141,57 @@ class Request {
                     if (Array.isArray(response)) return { body: JSON.stringify(response), headers: { 'Content-Type': 'application/json' }, status: 200 }
                     if (response instanceof Response) return { body: response.body, headers: response.headers, status: response.status }
                     if (typeof response === 'object') return { body: JSON.stringify(response), headers: { 'Content-Type': 'application/json' },status: 200 }
-                    this.logError(`invalid response: ${response}`)
+                    runEvent('error', [ `invalid response: ${response}` ])
                     return { status: 500 }
                 },
                 pathElements: path.split('/')
             }
-            
         }
     }
 
-    async handleRequest(request) {
-        this.time = Date.now()
-        this.lastRequest = request
-        let response = { status: 404 }
-        for (const [ route, { callback, pathElements } ] of Object.entries(this.routes)) {
-            const [ method, path ] = route.split(':')
-            const regex = new RegExp(`^${path}$`)
-            if (!regex.test(request.path) || method !== request.method) continue
-            const elements = request.path.split('/')
-            if (elements.length !== pathElements.length) break
-            const variables = []
-            for (let i=0; i<elements.length; i++) {
-                if (pathElements[i].startsWith('<') && pathElements[i].endsWith('>')) variables.push(elements[i])
-            }
-            response = await callback(variables)
-            return response
+    const runEvent = (event, parameters=[]) => {
+        if (typeof events[event] === 'function') {
+            setTimeout(() => events[event].apply(null, parameters))
         }
-        return response
     }
 
-    logError(error) {
-        if (typeof this.onerror === 'function') this.onerror(error)
+    const httpRequestEventHandler = {
+        on: (event, callback) => {
+            events[event] = callback
+        }
     }
-}
 
-
-
-
-
-export const easyHttpRequestHandler = (hadlerConfigFunction) => {
-    const handler = new Request()
-    hadlerConfigFunction(handler)
+    handlerConfigFunction(route, httpRequestEventHandler)
 
     return async (request) => {
+        request.time = Date.now()
+        runEvent('request', [ request ])
+
+        let response = { status: 404 }
+
         try {
-            const response = await handler.handleRequest(request)
-            if (typeof handler.onresponse === 'function') handler.onresponse(response)
-            return response
+            for (const [ route, { callback, pathElements } ] of Object.entries(routes)) {
+                const [ method, path ] = route.split(':', 2)
+                const regex = new RegExp(`^${path}$`)
+                if (!regex.test(request.path) || method !== request.method) continue
+                const elements = request.path.split('/')
+                if (elements.length !== pathElements.length) break
+                const parameters = [ request ]
+                for (let i=0; i<elements.length; i++) {
+                    if (pathElements[i].startsWith('<') && pathElements[i].endsWith('>')) parameters.push(elements[i])
+                }
+                response = await callback(parameters)
+            }
         }
         catch(error) {
-            handler.logError(error.message)
+            if (error instanceof Object) {
+                error = error.message
+            }
+            runEvent('error', [ error, request ])
+            response.status = 500
         }
+
+        runEvent('response', [ request, response ])
+        return response
     }
 }
