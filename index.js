@@ -164,6 +164,8 @@ class WebTableInstance extends InstanceBase {
             || !Array.isArray(this.config.data[element[0]]) || element[1] >= this.config.data[element[0]].length) continue
             this.config.data[element[0]][element[1]] = element[2]
             variableValues['value_' + this.getColumnLabel(element[1]) + (element[0]+1)] = element[2]
+			if (this.config.status.selected_row != element[0]) continue
+			variableValues['selected_row_value_' + this.getColumnLabel(element[1]) = element[2]
         }
 
         if (Object.keys(variableValues).length === 0) return false
@@ -649,7 +651,6 @@ class WebTableInstance extends InstanceBase {
                     options.column = this.getColumnIndex(options.column)
                     if (options.column === undefined) return this.logActionResult(actionId, context, `Cell Id "${options.cell}" invalid`, true)
                     if (options.column >= this.config.data[0].length || options.column < 0) return this.logActionResult(actionId, context, `Cell Id "${options.cell}" out of range`, true)
-
                     if (this.changeValues([[options.row, options.column, options.value]])) this.logActionResult(actionId, context, `Cell "${options.cell}" set to value "${options.value}"`)
                     else this.logActionResult(actionId, context, `Cell "${options.cell}" set to value "${options.value}" failed`, true)
                 }
@@ -917,6 +918,7 @@ class WebTableInstance extends InstanceBase {
         return variables
     }
 }
+
 
 
 runEntrypoint(WebTableInstance, upgradeScripts)
