@@ -374,7 +374,7 @@ class WebTableInstance extends InstanceBase {
                 const option = {
                     type: 'textinput',
                     label: `Content ${label}`,
-                    id: i,
+                    id: `${i}`,
                     useVariables: true,
                     default: '',
                     isVisibleData: i,
