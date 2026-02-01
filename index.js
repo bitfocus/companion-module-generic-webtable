@@ -165,7 +165,7 @@ class WebTableInstance extends InstanceBase {
             this.config.data[element[0]][element[1]] = element[2]
             variableValues['value_' + this.getColumnLabel(element[1]) + (element[0]+1)] = element[2]
 			if (this.config.status.selected_row != element[0]) continue
-			variableValues['selected_row_value_' + this.getColumnLabel(element[1]) = element[2]
+			variableValues['selected_row_value_' + this.getColumnLabel(element[1])] = element[2]
         }
 
         if (Object.keys(variableValues).length === 0) return false
@@ -922,3 +922,4 @@ class WebTableInstance extends InstanceBase {
 
 
 runEntrypoint(WebTableInstance, upgradeScripts)
+
