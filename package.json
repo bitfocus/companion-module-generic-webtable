@@ -1,6 +1,6 @@
 {
 	"name": "generic-webtable",
-	"version": "1.0.4",
+	"version": "1.0.5",
 	"main": "index.js",
 	"type": "module",
 	"scripts": {
@@ -12,9 +12,9 @@
 	},
 	"license": "MIT",
 	"dependencies": {
-		"@companion-module/base": "^1.10.0"
+		"@companion-module/base": "~1.15.1"
 	},
 	"devDependencies": {
-		"@companion-module/tools": "^2.8.0"
+		"@companion-module/tools": "~2.9.0"
 	}
 }

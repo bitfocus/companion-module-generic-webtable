@@ -3,7 +3,7 @@
 	"name": "Generic Web-Table",
 	"shortname": "table",
 	"description": "Generic Web-Table",
-	"version": "1.0.4",
+	"version": "1.0.5",
 	"license": "MIT",
 	"repository": "https://github.com/bitfocus/companion-module-generic-webtable",
 	"bugs": "https://github.com/bitfocus/companion-module-generic-webtable/issues",
@@ -15,7 +15,7 @@
 	],
 	"legacyIds": [],
 	"runtime": {
-		"type": "node18",
+		"type": "node26",
 		"api": "nodejs-ipc",
 		"apiVersion": "0.0.0",
 		"entrypoint": "../index.js"
